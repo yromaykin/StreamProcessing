@@ -102,7 +102,7 @@ object SpotBotStructeredStream {
 
     enormousAmountDF
       .writeStream
-      .outputMode(OutputMode.Update()) //TODO append
+      .outputMode(OutputMode.Update())
       .foreachBatch((batchDf: Dataset[EventDb], batchId: Long) => {
       batchDf.persist()
       batchDf

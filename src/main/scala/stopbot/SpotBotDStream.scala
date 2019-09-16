@@ -83,6 +83,7 @@ object SpotBotDStream {
       .map(json => {
         json.parseJson.convertTo[EventSchema]
       })
+      //todo not finished
       .window(Seconds(10), Seconds(5))
       .transform(rdd => rdd.groupBy(_.ip))
       .transform(rdd => rdd.map(aggregatedByIpEvent => (aggregatedByIpEvent._2.size > 10, aggregatedByIpEvent._2)))
