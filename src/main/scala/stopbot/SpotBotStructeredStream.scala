@@ -46,7 +46,7 @@ object SpotBotStructeredStream {
 
 
     val df = spark
-      //        .read
+//              .read
       .readStream
       .format("kafka")
       .option("kafka.bootstrap.servers", "127.0.0.1:9092")

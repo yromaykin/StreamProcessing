@@ -43,7 +43,7 @@ kafka-topics --list --zookeeper 127.0.0.1:2181
 Step 3.b:
 # Kafka Connect
 connect-standalone /capstone/connect/connect-standalone.properties /capstone/connect/connect-file-source.properties
-
+connect-standalone /capstone/scripts/connect-standalone.properties /capstone/scripts/connect-file-source.properties
 
 # transforms=replaceRegex
 # transforms.replaceRegex.type=org.apache.kafka.connect.transforms.RegexRouter

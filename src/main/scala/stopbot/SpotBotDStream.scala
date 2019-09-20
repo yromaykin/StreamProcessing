@@ -4,7 +4,7 @@ package stopbot
 import java.time.{LocalDateTime, ZoneOffset}
 
 import com.datastax.spark.connector.cql.CassandraConnector
-import model.parcer.DateFormatParser
+import model.EventSchema
 import org.apache.ignite.IgniteCache
 import org.apache.ignite.spark.IgniteContext
 import org.apache.kafka.common.serialization.StringDeserializer
@@ -22,21 +22,13 @@ object SpotBotDStream {
 
   def main(args: Array[String]) {
 
-    case class EventSchema(unix_time: LocalDateTime, category_id: Int, ip: String, `type`: String) {
-      override def toString(): String = "(" + unix_time + ", " + category_id + ", " + ip + ")";
-    }
-
-
     object MyJsonProtocol extends DefaultJsonProtocol {
-      import DateFormatParser.DateFormat
       implicit val eventFormat = jsonFormat4(EventSchema)
     }
 
 
     val conf = new SparkConf().setAppName("DStreamSpotBot").setMaster("local[5]")
-    val streamingContext = new StreamingContext(conf, Seconds(10))
-
-    streamingContext.checkpoint("./checkpoint")
+    val streamingContext = new StreamingContext(conf, Seconds(2))
 
     streamingContext.sparkContext.setLogLevel("WARN")
 
@@ -79,32 +71,21 @@ object SpotBotDStream {
 
 
     import MyJsonProtocol._
+    import dstream.DStreamHelper.DStream
     val regexp = """(\{.*\})""".r
 
-    implicit val eventSchemaOrdering: Ordering[EventSchema] = Ordering.by(_.unix_time.toEpochSecond(ZoneOffset.UTC))
+    //    implicit val eventSchemaOrdering: Ordering[EventSchema] = Ordering.by(_.unix_time.toEpochSecond(ZoneOffset.UTC))
     implicit val localDateTimeOrdering: Ordering[LocalDateTime] = Ordering.by(_.toEpochSecond(ZoneOffset.UTC))
 
-    stream.map(rdd => rdd.value())
+    stream
+      .map(rdd => rdd.value())
       .map(json => json.replaceAll("\\\\", ""))
       .map(json => regexp.findFirstIn(json).orNull)
       .filter(json => json != null)
       .map(json => json.parseJson.convertTo[EventSchema])
-      .transform(_.sortBy(_.unix_time))
-      .transform(rdd => rdd.groupBy(v => v.unix_time.toEpochSecond(ZoneOffset.UTC) / 10))
-//      .map(event => {
-//        println(event)
-//        event
-//      })
-      .map(_._2)
-//      .map(event => {
-//        println(event)
-//        event
-//      })
-      .map(v => {
-        val groupedByIp = v.groupBy(_.ip)
-        groupedByIp.mapValues(v => v -> v.size.>(2))
-      })
-      .flatMap(_.values)
+      .convertToEventTimeAwareStream(Seconds(10))
+      .transform(rdd => rdd.groupBy(_.ip))
+      .transform(rdd => rdd.map(aggregatedByIpEvent => (aggregatedByIpEvent._2.size > 20, aggregatedByIpEvent._2)))
       .foreachRDD(rdd => {
         rdd
           .map(events => {
@@ -114,26 +95,25 @@ object SpotBotDStream {
               s"""insert into $namespace.$table
               ($column_ip, $column_categoryId, $column_unixTime, $column_eventType, $column_is_bot )
               values (?, ?, ?, ?, ?)""")
-            val isBot = events._2
-            events._1.toStream.foreach(event => {
+            val isBot = events._1
+            events._2.toStream.foreach(event => {
               session.execute(
                 insert.bind(event.ip, event.category_id.toString, event.unix_time.toString, event.`type`, isBot.toString))
             })
             println("cassandra")
             events
           })
-          .filter(_._2) //write only bots
-          .map(_._1)
+          .filter(_._1) //write only bots
+          .map(_._2)
           .foreach(events => {
             val ignite = igniteContext.ignite()
             val cache: IgniteCache[String, LocalDateTime] = ignite.getOrCreateCache("bots")
             events.toStream.foreach(event => {
-              val result = cache.putIfAbsent(event.ip, event.unix_time)
+              val result = cache.putIfAbsent(event.ip, LocalDateTime.ofEpochSecond(event.unix_time, 0, ZoneOffset.UTC))
             })
             println("cache")
           })
       })
-
 
     streamingContext.start()
     streamingContext.awaitTermination()
