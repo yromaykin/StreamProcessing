@@ -15,11 +15,10 @@ class EventTimeAwareDStream[T: ClassTag](parent: DStream[T],
   //  @transient
   //  val mineGeneratedRDDs = new HashMap[Time, EventSchema]()
   //  var minTime: Time = Time(0)
-  var hugeRDD: RDD[EventSchema] = null
 
   var time: Time = null
 
-  var groupByTime: Map[Time, Array[EventSchema]] = null
+  var groupByTime: Map[Time, Array[EventSchema]] = Map[Time, Array[EventSchema]]()
 
   override def dependencies: List[DStream[_]] = List(parent)
 
@@ -27,16 +26,19 @@ class EventTimeAwareDStream[T: ClassTag](parent: DStream[T],
 
   override def compute(validTime: Time): Option[RDD[T]] = {
 
-    if (hugeRDD == null) {
-      hugeRDD = parent.getOrCompute(validTime)
-        .filter(rdd => !rdd.isEmpty())
-        .map(rdd =>
-          rdd.map(_.asInstanceOf[EventSchema])
-            .sortBy(_.unix_time))
-        .get
+
+    val hugeRDD = parent.getOrCompute(validTime)
+      .filter(rdd => !rdd.isEmpty())
+      .map(rdd =>
+        rdd.map(_.asInstanceOf[EventSchema])
+          .sortBy(_.unix_time))
+      .orNull
+//      .map(rdd => groupByTime += rdd.collect().groupBy(v => Time(v.unix_time * 1000)))
+    if(hugeRDD != null) {
       groupByTime = hugeRDD.collect().groupBy(v => Time(v.unix_time * 1000))
-      time = groupByTime.keys.min
     }
+    time = groupByTime.keys.min
+
     println("groupBySize: " + groupByTime.size)
     if (groupByTime != null) {
       val eventPartitions = groupByTime.partition(entry => entry._1.greaterEq(time) && entry._1.lessEq(time + window))
