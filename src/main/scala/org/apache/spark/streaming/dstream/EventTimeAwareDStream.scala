@@ -37,13 +37,13 @@ class EventTimeAwareDStream[T: ClassTag](parent: DStream[T],
       groupByTime = hugeRDD.collect().groupBy(v => Time(v.unix_time * 1000))
       time = groupByTime.keys.min
     }
-
+    println("groupBySize: " + groupByTime.size)
     if (groupByTime != null) {
-      val events = groupByTime.keys
-        .filter(keyTime => keyTime.greater(time) && keyTime.less(time + window))
-        .map(time => groupByTime.get(time))
-        .flatMap(evs => evs.orNull.toList).toSeq
+      val eventPartitions = groupByTime.partition(entry => entry._1.greaterEq(time) && entry._1.lessEq(time + window))
+      groupByTime = eventPartitions._2
       time += window
+      val events = eventPartitions._1.values.flatMap(_.toStream).toSeq
+      println("Time:" + time)
       Some(ssc.sc.makeRDD(events, 5)).asInstanceOf[Option[RDD[T]]]
     } else {
       Some(new EmptyRDD[T](this.ssc.sc))

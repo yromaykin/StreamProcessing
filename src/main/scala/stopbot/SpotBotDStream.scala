@@ -84,8 +84,14 @@ object SpotBotDStream {
       .filter(json => json != null)
       .map(json => json.parseJson.convertTo[EventSchema])
       .convertToEventTimeAwareStream(Seconds(10))
+//      .repartition(1)
+//      .transform(rdd => rdd.sortBy(_.unix_time))
+//      .map(event => {
+//        println(event)
+//        event
+//      })
       .transform(rdd => rdd.groupBy(_.ip))
-      .transform(rdd => rdd.map(aggregatedByIpEvent => (aggregatedByIpEvent._2.size > 20, aggregatedByIpEvent._2)))
+      .transform(rdd => rdd.map(aggregatedByIpEvent => (aggregatedByIpEvent._2.size > 4, aggregatedByIpEvent._2)))
       .foreachRDD(rdd => {
         rdd
           .map(events => {
@@ -100,7 +106,7 @@ object SpotBotDStream {
               session.execute(
                 insert.bind(event.ip, event.category_id.toString, event.unix_time.toString, event.`type`, isBot.toString))
             })
-            println("cassandra")
+//            println("cassandra")
             events
           })
           .filter(_._1) //write only bots
