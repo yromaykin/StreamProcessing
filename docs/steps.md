@@ -62,6 +62,11 @@ select * from spotbot.bots;
 
 docker-compose -f docker-compose-with-ignite.yml up --force-recreate
 
+docker exec -it docs_cassandra-1_1 /bin/bash
+docker exec -it docs_kafka-cluster_1 /bin/bash
+docker-compose -f docker-compose-with-ignite.yml up --force-recreate
+python3 botgen.py -c True -dir ../data/
+
 
 
 
