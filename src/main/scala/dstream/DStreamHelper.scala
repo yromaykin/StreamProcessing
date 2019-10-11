@@ -10,7 +10,7 @@ object DStreamHelper {
 
   implicit class DStream[T: ClassTag](stream: org.apache.spark.streaming.dstream.DStream[T]) {
 
-    def convertToEventTimeAwareStream(window: Duration): EventTimeAwareDStream[T] = {
+    def convertToEventTimeAwareStream(window: Int): EventTimeAwareDStream[T] = {
       new EventTimeAwareDStream[T](stream, false, window)
     }
   }

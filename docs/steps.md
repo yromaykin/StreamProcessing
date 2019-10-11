@@ -55,6 +55,13 @@ Step 4:
 # Spark
 
 
+connect-standalone /capstone/scripts/connect-standalone.properties /capstone/scripts/connect-file-source.properties
+
+python3 botgen.py -c True -dir ../data/
+select * from spotbot.bots;
+
+docker-compose -f docker-compose-with-ignite.yml up --force-recreate
+
 
 
 

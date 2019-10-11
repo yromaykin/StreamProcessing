@@ -29,7 +29,6 @@ object SpotBotDStream {
 
     val conf = new SparkConf().setAppName("DStreamSpotBot").setMaster("local[5]")
     val streamingContext = new StreamingContext(conf, Seconds(2))
-
     streamingContext.sparkContext.setLogLevel("WARN")
 
     val kafkaParams = Map[String, Object](
@@ -83,15 +82,9 @@ object SpotBotDStream {
       .map(json => regexp.findFirstIn(json).orNull)
       .filter(json => json != null)
       .map(json => json.parseJson.convertTo[EventSchema])
-      .convertToEventTimeAwareStream(Seconds(10))
-//      .repartition(1)
-//      .transform(rdd => rdd.sortBy(_.unix_time))
-//      .map(event => {
-//        println(event)
-//        event
-//      })
+      .convertToEventTimeAwareStream(10)
       .transform(rdd => rdd.groupBy(_.ip))
-      .transform(rdd => rdd.map(aggregatedByIpEvent => (aggregatedByIpEvent._2.size > 4, aggregatedByIpEvent._2)))
+      .transform(rdd => rdd.map(aggregatedByIpEvent => (aggregatedByIpEvent._2.size > 10, aggregatedByIpEvent._2)))
       .foreachRDD(rdd => {
         rdd
           .map(events => {
